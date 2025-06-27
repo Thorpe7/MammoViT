@@ -1,0 +1,10 @@
+.vscode/
+data/
+.python-version
+*.pyc
+__pycache__/
+poetry.lock
+
+# Include logs directory structure but exclude files
+logs/*
+!logs/.gitkeep
