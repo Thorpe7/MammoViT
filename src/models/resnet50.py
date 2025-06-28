@@ -11,3 +11,14 @@ class ResNet:
     def get_model(self):
         # Return the modified model
         return self.model
+
+    @staticmethod
+    def global_average_pooling(features):
+        """
+        Perform global average pooling on the feature maps.
+        Args:
+            features (torch.Tensor): Feature maps of shape [batch_size, channels, height, width].
+        Returns:
+            torch.Tensor: Pooled features of shape [batch_size, channels].
+        """
+        return features.mean(dim=[2, 3])

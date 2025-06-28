@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader, Subset
+from torch.utils.data import Dataset, DataLoader, Subset, WeightedRandomSampler
 from torchvision import datasets, transforms
 from sklearn.model_selection import StratifiedShuffleSplit
 
@@ -75,7 +75,21 @@ def load_data_with_logging(data_dir, batch_size=32, num_workers=4, val_split=0.2
         logging.info(f"Training samples: {len(train_dataset)}")
         logging.info(f"Validation samples: {len(val_dataset)}")
 
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+        # Calculate class weights for WeightedRandomSampler
+        class_counts = np.bincount(targets)
+        class_weights = 1.0 / class_counts
+        sample_weights = [class_weights[label] for label in targets]
+        train_sample_weights = np.array(sample_weights)[train_idx]
+
+        # Created sampler to even out class imbalance in batches
+        # Just reduces downstream work needed to incorporate SMOTE
+        sampler = WeightedRandomSampler(
+            weights=train_sample_weights, # type: ignore
+            num_samples=len(train_sample_weights),
+            replacement=True
+        )
+
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=sampler, num_workers=num_workers)
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
         return {"train": train_loader, "val": val_loader}
