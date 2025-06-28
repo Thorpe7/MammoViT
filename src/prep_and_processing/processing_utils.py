@@ -1,31 +1,25 @@
 import torch
 import numpy as np
 from imblearn.over_sampling import SMOTE
+from sklearn.preprocessing import StandardScaler
 
-def reshape_for_vit(input_tensor, patch_size=16):
+def reshape_for_vit(input_tensor):
     """
-    Reshape image tensor into patches expected by ViT.
+    Reshape input tensor into patches expected by ViT.
+    Using fixed dimensions instead of dynamic patch size for simplicity.
 
     Args:
-        input_tensor (torch.Tensor): [B, C, H, W]
-        patch_size (int): Size of each patch (ViT default is 16)
+        input_tensor (torch.Tensor): [B, D] where B is batch size and D is feature dimension (2048).
 
     Returns:
-        torch.Tensor: [B, num_patches, patch_dim]
+        torch.Tensor: [B, 16, 16, 8]
     """
-    B, C, H, W = input_tensor.shape
-    assert H % patch_size == 0 and W % patch_size == 0, "Image dimensions must be divisible by patch size"
+    B, D = input_tensor.shape
+    assert D == 2048, "Feature dimension must be 2048"
 
-    num_patches_h = H // patch_size
-    num_patches_w = W // patch_size
-    num_patches = num_patches_h * num_patches_w
-    patch_dim = C * patch_size * patch_size
-
-    patches = input_tensor.unfold(2, patch_size, patch_size).unfold(3, patch_size, patch_size)
-    patches = patches.permute(0, 2, 3, 1, 4, 5).contiguous()
-    patches = patches.view(B, num_patches, patch_dim)
-
-    return patches
+    # Reshape to [B, 16, 16, 8]
+    output_tensor = input_tensor.view(B, 16, 16, 8)
+    return output_tensor
 
 def apply_smote(features, labels, random_state=42):
     """
@@ -50,6 +44,22 @@ def apply_smote(features, labels, random_state=42):
     smote = SMOTE(random_state=random_state, k_neighbors=n_neighbors)
     oversampled_features_np, oversampled_labels_np = smote.fit_resample(features, labels)  # type: ignore
     return oversampled_features_np, oversampled_labels_np
+
+def normalize_smote_output(features, labels):
+    """
+    Normalize the features output from apply_smote using StandardScaler.
+
+    Args:
+        features (numpy.ndarray): Oversampled features array [N, D].
+        labels (numpy.ndarray): Oversampled labels array [N].
+
+    Returns:
+        numpy.ndarray: Normalized features.
+        numpy.ndarray: Labels (unchanged).
+    """
+    scaler = StandardScaler()
+    normalized_features = scaler.fit_transform(features)
+    return normalized_features, labels
 
 def tensor_to_numpy(input_tensor):
     """

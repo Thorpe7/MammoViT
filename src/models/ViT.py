@@ -4,7 +4,7 @@ import torch.nn as nn
 import logging
 import os
 from pathlib import Path
-from retrain_fine_tune.ViT_finetune import fine_tune_model  # Import the new function
+from src.retrain_fine_tune.ViT_finetune import fine_tune_model  # Import the new function
 
 # Configure logging
 log_dir = Path().cwd() / "logs" / "inference"

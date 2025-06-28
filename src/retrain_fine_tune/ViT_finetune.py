@@ -5,7 +5,7 @@ import os
 def fine_tune_model(model, train_loader, val_loader, epochs=5, lr=1e-4, checkpoint_path=None):
     """
     Fine-tune the model on a new dataset. Optionally resume from a checkpoint and save progress.
-    
+
     Args:
         model (nn.Module): The model to fine-tune.
         train_loader (DataLoader): Training data.
