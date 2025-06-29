@@ -29,54 +29,36 @@ class TransformerBlock(nn.Module):
         self.norm2 = nn.LayerNorm(embed_dim)
 
     def forward(self, x):
-        # Self-attention
         attn_output, _ = self.attn(x, x, x)
         x = self.norm1(x + attn_output)
-
-        # Feedforward
-        ff_output = self.ff(x)
-        x = self.norm2(x + ff_output)
+        x = self.norm2(x + self.ff(x))
         return x
 
 class ViTModel(nn.Module):
-    def __init__(self, num_classes=4, dropout=0.3):
+    def __init__(self, num_classes=4, dropout=0.3, proj_dim=64, n_blocks=2, n_heads=4):
         super().__init__()
 
-        # 1. Conv2D: [B, 8, 16, 16] → [B, 64, 4, 4]
-        self.conv = nn.Conv2d(in_channels=8, out_channels=64, kernel_size=4, stride=4)
-        # 2. Flatten and reshape: [B, 64, 4, 4] → [B, 16, 64]
-        # done in forward()
+        # Conv2D: [B, 8, 16, 16] → [B, proj_dim, 4, 4] if kernel=4, stride=4
+        self.conv = nn.Conv2d(in_channels=8, out_channels=proj_dim, kernel_size=4, stride=4)
 
-        # 3–5. Transformer layers
-        self.block1 = TransformerBlock(embed_dim=64, ff_dim=128, num_heads=4, dropout=dropout)
-        self.block2 = TransformerBlock(embed_dim=64, ff_dim=128, num_heads=4, dropout=dropout)
+        # Transformer blocks
+        self.blocks = nn.Sequential(*[
+            TransformerBlock(embed_dim=proj_dim, ff_dim=proj_dim * 2, num_heads=n_heads, dropout=dropout)
+            for _ in range(n_blocks)
+        ])
 
-        # 6. Global average pooling over sequence length
+        # Pool + head
         self.pool = nn.AdaptiveAvgPool1d(1)
-
-        # 7. Classification head: [B, 64] → [B, num_classes]
-        self.head = nn.Linear(64, num_classes)
+        self.head = nn.Linear(proj_dim, num_classes)
 
     def forward(self, x):
         try:
-            # Conv layer
-            x = self.conv(x)  # → [B, 64, 4, 4]
-
-            # Reshape to sequence: [B, 64, 4, 4] → [B, 16, 64]
+            x = self.conv(x)  # [B, proj_dim, 4, 4]
             B, C, H, W = x.shape
-            x = x.permute(0, 2, 3, 1).reshape(B, H * W, C)
-
-            # Transformer blocks
-            x = self.block1(x)
-            x = self.block2(x)
-
-            # Global average pooling
-            x = x.transpose(1, 2)  # [B, 64, 16]
-            x = self.pool(x).squeeze(-1)  # [B, 64]
-
-            # Final classification
-            return self.head(x)
-
+            x = x.permute(0, 2, 3, 1).reshape(B, H * W, C)  # [B, 16, proj_dim]
+            x = self.blocks(x)  # Transformer layers
+            x = self.pool(x.transpose(1, 2)).squeeze(-1)  # [B, proj_dim]
+            return self.head(x)  # [B, num_classes]
         except Exception as e:
             logging.error(f"ViTModel forward pass failed: {e}")
             raise e

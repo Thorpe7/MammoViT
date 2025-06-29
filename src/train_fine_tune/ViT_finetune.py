@@ -64,7 +64,17 @@ def log_trial_result(log_path, trial_index, hyperparams, val_loss):
             df.to_csv(log_path, index=False)
 
 
-def fine_tune_model_with_search(model_class, train_loader, val_loader, num_classes, tuner_epochs=50):
+from itertools import product
+import random
+
+def fine_tune_model_with_search(
+    model_class,
+    train_loader,
+    val_loader,
+    num_classes,
+    tuner_epochs=50,
+    run_final_train=True
+):
     base_ckpt_dir = Path("logs/checkpoints")
     hp_ckpt_dir = base_ckpt_dir / "hp_tuning"
     vit_ckpt_dir = base_ckpt_dir / "ViT_tuning"
@@ -73,10 +83,17 @@ def fine_tune_model_with_search(model_class, train_loader, val_loader, num_class
 
     search_space = {
         'lr': [1e-2, 1e-3, 1e-4],
+        'proj_dim': [32, 48, 64],
+        'n_blocks': [2, 3, 4, 5],
+        'n_heads': [2, 4, 6, 8],
         'dropout': [0.3, 0.4, 0.5, 0.6, 0.7],
     }
 
-    param_combinations = list(product(*search_space.values()))
+    # Only include valid combinations where proj_dim is divisible by n_heads
+    param_combinations = [
+        combo for combo in product(*search_space.values())
+        if combo[1] % combo[3] == 0  # proj_dim % n_heads == 0
+    ]
     random.shuffle(param_combinations)
     selected_trials = param_combinations[:10]
 
@@ -90,6 +107,9 @@ def fine_tune_model_with_search(model_class, train_loader, val_loader, num_class
 
         model_instance = model_class(
             num_classes=num_classes,
+            proj_dim=hp['proj_dim'],
+            n_blocks=hp['n_blocks'],
+            n_heads=hp['n_heads'],
             dropout=hp['dropout']
         ).to(device)
 
@@ -156,17 +176,35 @@ def fine_tune_model_with_search(model_class, train_loader, val_loader, num_class
     print(f"\nBest trial parameters: {best_params}")
     print(f"Lowest validation loss: {best_val_loss:.4f}")
 
-    print("\n🔍 Evaluating best model on validation set...")
+    if not run_final_train:
+        print("⚠️ Skipping final training as `run_final_train=False`.")
+        return
+
+    # --- Final Training ---
+    print("\n🔁 Retraining best model from scratch...")
     best_model = model_class(
         num_classes=num_classes,
+        proj_dim=best_params['proj_dim'],
+        n_blocks=best_params['n_blocks'],
+        n_heads=best_params['n_heads'],
         dropout=best_params['dropout']
     ).to(device)
 
-    best_model.load_state_dict(best_model_state)
-    best_model.eval()
+    optimizer = optim.Adam(best_model.parameters(), lr=best_params['lr'])
+    criterion = nn.CrossEntropyLoss()
 
-    all_preds = []
-    all_labels = []
+    for epoch in range(tuner_epochs):
+        best_model.train()
+        for inputs, labels in train_loader:
+            inputs, labels = inputs.to(device), labels.long().to(device)
+            optimizer.zero_grad()
+            outputs = best_model(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+
+    best_model.eval()
+    all_preds, all_labels = [], []
 
     with torch.no_grad():
         for inputs, labels in val_loader:
