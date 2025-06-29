@@ -21,7 +21,7 @@ class TransformSubset(Dataset):
     def __len__(self):
         return len(self.subset)
 
-def load_data_with_logging(data_dir, batch_size=32, num_workers=4, val_split=0.2) -> dict:
+def load_data_with_logging(data_dir, batch_size=32, num_workers=2, val_split=0.2) -> dict:
     """
     Load image data with stratified train/val split and distinct transforms.
     Logs metadata and returns DataLoaders.

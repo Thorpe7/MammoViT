@@ -8,7 +8,7 @@ from itertools import product
 from sklearn.metrics import accuracy_score
 from pathlib import Path
 
-from src.retrain_fine_tune.metric_collection import (
+from src.train_fine_tune.metric_collection import (
     initialize_metric_logs,
     log_epoch_metrics,
     save_confusion_matrix
@@ -16,21 +16,20 @@ from src.retrain_fine_tune.metric_collection import (
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def save_partial_checkpoint(model, optimizer, trial_index, epoch, hyperparams, save_dir):
-    """Save partial training progress after each epoch."""
+
+def save_partial_checkpoint(model_instance, optimizer, trial_index, epoch, hyperparams, save_dir):
     save_dir.mkdir(parents=True, exist_ok=True)
     ckpt_path = save_dir / f"partial_checkpoint_trial{trial_index}_epoch{epoch}.pth"
     torch.save({
         'trial_index': trial_index,
         'epoch': epoch,
         'hyperparams': hyperparams,
-        'model_state_dict': model.state_dict(),
+        'model_state_dict': model_instance.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
     }, ckpt_path)
 
 
 def save_best_checkpoint(model_state, optimizer_state, best_params, epoch, save_path):
-    """Save the best model checkpoint with its optimizer state and hyperparameters."""
     save_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save({
         'epoch': epoch,
@@ -41,7 +40,6 @@ def save_best_checkpoint(model_state, optimizer_state, best_params, epoch, save_
 
 
 def log_trial_result(log_path, trial_index, hyperparams, val_loss):
-    """Append trial results to a JSON or CSV log."""
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_data = {
         'trial_index': trial_index,
@@ -66,8 +64,7 @@ def log_trial_result(log_path, trial_index, hyperparams, val_loss):
             df.to_csv(log_path, index=False)
 
 
-def fine_tune_model_with_search(model, train_loader, val_loader, tuner_epochs=50):
-    """Perform randomized hyperparameter search with checkpointing and logging."""
+def fine_tune_model_with_search(model_class, train_loader, val_loader, num_classes, tuner_epochs=50):
     base_ckpt_dir = Path("logs/checkpoints")
     hp_ckpt_dir = base_ckpt_dir / "hp_tuning"
     vit_ckpt_dir = base_ckpt_dir / "ViT_tuning"
@@ -76,9 +73,6 @@ def fine_tune_model_with_search(model, train_loader, val_loader, tuner_epochs=50
 
     search_space = {
         'lr': [1e-2, 1e-3, 1e-4],
-        'proj_dim': [32, 48, 64],
-        'n_blocks': [2, 3, 4, 5],
-        'n_heads': [2, 4, 6, 8],
         'dropout': [0.3, 0.4, 0.5, 0.6, 0.7],
     }
 
@@ -94,28 +88,25 @@ def fine_tune_model_with_search(model, train_loader, val_loader, tuner_epochs=50
         hp = dict(zip(search_space.keys(), params))
         print(f"\nTrial {i + 1}: Testing hyperparameters: {hp}")
 
-        model = model(
-            proj_dim=hp['proj_dim'],
-            n_blocks=hp['n_blocks'],
-            n_heads=hp['n_heads'],
+        model_instance = model_class(
+            num_classes=num_classes,
             dropout=hp['dropout']
         ).to(device)
 
-        optimizer = optim.Adam(model.parameters(), lr=hp['lr'])
+        optimizer = optim.Adam(model_instance.parameters(), lr=hp['lr'])
         criterion = nn.CrossEntropyLoss()
 
-        # ⏺ Initialize metric logging for this trial
         initialize_metric_logs(metrics_dir)
 
         for epoch in range(tuner_epochs):
-            model.train()
+            model_instance.train()
             train_loss = 0.0
             train_preds, train_labels = [], []
 
             for inputs, labels in train_loader:
-                inputs, labels = inputs.to(device), labels.to(device)
+                inputs, labels = inputs.to(device), labels.long().to(device)
                 optimizer.zero_grad()
-                outputs = model(inputs)
+                outputs = model_instance(inputs)
                 loss = criterion(outputs, labels)
                 loss.backward()
                 optimizer.step()
@@ -128,15 +119,14 @@ def fine_tune_model_with_search(model, train_loader, val_loader, tuner_epochs=50
             avg_train_loss = train_loss / len(train_loader)
             train_acc = accuracy_score(train_labels, train_preds)
 
-            # Validation for epoch
-            model.eval()
+            model_instance.eval()
             val_loss = 0.0
             val_preds, val_labels = [], []
 
             with torch.no_grad():
                 for inputs, labels in val_loader:
-                    inputs, labels = inputs.to(device), labels.to(device)
-                    outputs = model(inputs)
+                    inputs, labels = inputs.to(device), labels.long().to(device)
+                    outputs = model_instance(inputs)
                     loss = criterion(outputs, labels)
                     val_loss += loss.item()
                     preds = torch.argmax(outputs, dim=1)
@@ -146,19 +136,15 @@ def fine_tune_model_with_search(model, train_loader, val_loader, tuner_epochs=50
             avg_val_loss = val_loss / len(val_loader)
             val_acc = accuracy_score(val_labels, val_preds)
 
-            # 📝 Save epoch metrics
             log_epoch_metrics(metrics_dir, epoch, avg_train_loss, avg_val_loss, train_acc, val_acc)
+            save_partial_checkpoint(model_instance, optimizer, i, epoch, hp, hp_ckpt_dir)
 
-            # 💾 Save partial checkpoint
-            save_partial_checkpoint(model, optimizer, i, epoch, hp, hp_ckpt_dir)
-
-        # 🧪 Trial validation summary
         print(f"Validation loss: {avg_val_loss:.4f}") # type: ignore
         log_trial_result(log_path, i, hp, avg_val_loss) # type: ignore
 
         if avg_val_loss < best_val_loss: # type: ignore
             best_val_loss = avg_val_loss # type: ignore
-            best_model_state = model.state_dict()
+            best_model_state = model_instance.state_dict()
             best_params = hp.copy()
             best_ckpt_path = vit_ckpt_dir / "best_vit_checkpoint.pth"
             save_best_checkpoint(best_model_state, optimizer.state_dict(), best_params, epoch, best_ckpt_path) # type: ignore
@@ -170,12 +156,9 @@ def fine_tune_model_with_search(model, train_loader, val_loader, tuner_epochs=50
     print(f"\nBest trial parameters: {best_params}")
     print(f"Lowest validation loss: {best_val_loss:.4f}")
 
-    # 🧠 Final evaluation on validation set with best model
     print("\n🔍 Evaluating best model on validation set...")
-    best_model = model(
-        proj_dim=best_params['proj_dim'],
-        n_blocks=best_params['n_blocks'],
-        n_heads=best_params['n_heads'],
+    best_model = model_class(
+        num_classes=num_classes,
         dropout=best_params['dropout']
     ).to(device)
 
@@ -193,8 +176,6 @@ def fine_tune_model_with_search(model, train_loader, val_loader, tuner_epochs=50
             all_preds.extend(preds.numpy())
             all_labels.extend(labels.numpy())
 
-    # 🧾 Save confusion matrix
     save_confusion_matrix(metrics_dir, all_labels, all_preds)
-
     acc = accuracy_score(all_labels, all_preds)
     print(f"✅ Final Validation Accuracy: {acc * 100:.2f}%")
