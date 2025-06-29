@@ -5,6 +5,7 @@ data/
 __pycache__/
 poetry.lock
 /logs
+.DS_Store
 
 # Include logs directory structure but exclude files
 logs/*

@@ -217,3 +217,12 @@ def fine_tune_model_with_search(
     save_confusion_matrix(metrics_dir, all_labels, all_preds)
     acc = accuracy_score(all_labels, all_preds)
     print(f"✅ Final Validation Accuracy: {acc * 100:.2f}%")
+
+    # Save the fully trained best model
+    final_model_path = vit_ckpt_dir / "final_best_tuned_vit_model.pth"
+    torch.save({
+        'model_state_dict': best_model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'params': best_params
+    }, final_model_path)
+    print(f"✅ Fully trained model saved at: {final_model_path}")
