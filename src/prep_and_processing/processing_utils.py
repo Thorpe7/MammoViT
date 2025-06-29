@@ -3,23 +3,30 @@ import numpy as np
 from imblearn.over_sampling import SMOTE
 from sklearn.preprocessing import StandardScaler
 
+import torch
+import torch.nn.functional as F
+
 def reshape_for_vit(input_tensor):
     """
-    Reshape input tensor into patches expected by ViT.
-    Using fixed dimensions instead of dynamic patch size for simplicity.
+    Reshape and upsample input tensor to match ViT expected input shape.
 
     Args:
-        input_tensor (torch.Tensor): [B, D] where B is batch size and D is feature dimension (2048).
+        input_tensor (torch.Tensor): [B, D] where D == 2048.
 
     Returns:
-        torch.Tensor: [B, 16, 16, 8]
+        torch.Tensor: [B, 8, 224, 224] for ViT compatibility.
     """
     B, D = input_tensor.shape
     assert D == 2048, "Feature dimension must be 2048"
 
-    # Reshape to [B, 16, 16, 8]
-    output_tensor = input_tensor.view(B, 16, 16, 8)
-    return output_tensor
+    # Step 1: Reshape to [B, 16, 16, 8]
+    x = input_tensor.view(B, 16, 16, 8)
+
+    # Step 2: Permute to [B, 8, 16, 16]
+    x = x.permute(0, 3, 1, 2)
+
+    return x
+
 
 def apply_smote(features, labels, random_state=42):
     """
