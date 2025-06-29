@@ -45,21 +45,6 @@ def apply_smote(features, labels, random_state=42):
     oversampled_features_np, oversampled_labels_np = smote.fit_resample(features, labels)  # type: ignore
     return oversampled_features_np, oversampled_labels_np
 
-def normalize_smote_output(features, labels):
-    """
-    Normalize the features output from apply_smote using StandardScaler.
-
-    Args:
-        features (numpy.ndarray): Oversampled features array [N, D].
-        labels (numpy.ndarray): Oversampled labels array [N].
-
-    Returns:
-        numpy.ndarray: Normalized features.
-        numpy.ndarray: Labels (unchanged).
-    """
-    scaler = StandardScaler()
-    normalized_features = scaler.fit_transform(features)
-    return normalized_features, labels
 
 def tensor_to_numpy(input_tensor):
     """
