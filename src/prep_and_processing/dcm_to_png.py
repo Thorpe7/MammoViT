@@ -40,13 +40,13 @@ def convert_dicom_to_png_dir(
 
     print(f"All DICOMs converted to PNG in: {dst_root}")
 if __name__ == "__main__":
-    # Local run
-    convert_dicom_to_png_dir(
-        src_root="/Users/thorpe/git_repos/MammoViT/data/INbreast/OrganizedByBiRads",
-        dst_root="/Users/thorpe/git_repos/MammoViT/data/INbreast/OrganizedByBiRads_PNG"
-)
-    # Use w/ colab
+#     # Local run
 #     convert_dicom_to_png_dir(
 #         src_root="/Users/thorpe/git_repos/MammoViT/data/INbreast/OrganizedByBiRads",
 #         dst_root="/Users/thorpe/git_repos/MammoViT/data/INbreast/OrganizedByBiRads_PNG"
 # )
+    # Use w/ colab
+    convert_dicom_to_png_dir(
+        src_root="/Users/thorpe/git_repos/MammoViT/data/INbreast/OrganizedByBiRads",
+        dst_root="/Users/thorpe/git_repos/MammoViT/data/INbreast/OrganizedByBiRads_PNG"
+)
