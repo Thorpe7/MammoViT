@@ -64,9 +64,6 @@ def log_trial_result(log_path, trial_index, hyperparams, val_loss):
             df.to_csv(log_path, index=False)
 
 
-from itertools import product
-import random
-
 def fine_tune_model_with_search(
     model_class,
     train_loader,
@@ -79,7 +76,7 @@ def fine_tune_model_with_search(
     hp_ckpt_dir = base_ckpt_dir / "hp_tuning"
     vit_ckpt_dir = base_ckpt_dir / "ViT_tuning"
     log_path = vit_ckpt_dir / "trial_log.csv"
-    metrics_dir = Path("logs/metrics/ViT_tuning")
+    final_metrics_dir = Path("logs/metrics/ViT_tuning")
 
     search_space = {
         'lr': [1e-2, 1e-3, 1e-4],
@@ -89,10 +86,9 @@ def fine_tune_model_with_search(
         'dropout': [0.3, 0.4, 0.5, 0.6, 0.7],
     }
 
-    # Only include valid combinations where proj_dim is divisible by n_heads
     param_combinations = [
         combo for combo in product(*search_space.values())
-        if combo[1] % combo[3] == 0  # proj_dim % n_heads == 0
+        if combo[1] % combo[3] == 0
     ]
     random.shuffle(param_combinations)
     selected_trials = param_combinations[:10]
@@ -116,13 +112,8 @@ def fine_tune_model_with_search(
         optimizer = optim.Adam(model_instance.parameters(), lr=hp['lr'])
         criterion = nn.CrossEntropyLoss()
 
-        initialize_metric_logs(metrics_dir)
-
         for epoch in range(tuner_epochs):
             model_instance.train()
-            train_loss = 0.0
-            train_preds, train_labels = [], []
-
             for inputs, labels in train_loader:
                 inputs, labels = inputs.to(device), labels.long().to(device)
                 optimizer.zero_grad()
@@ -131,39 +122,22 @@ def fine_tune_model_with_search(
                 loss.backward()
                 optimizer.step()
 
-                train_loss += loss.item()
-                preds = torch.argmax(outputs, dim=1)
-                train_preds.extend(preds.cpu().numpy())
-                train_labels.extend(labels.cpu().numpy())
+        # Validation loss after final epoch
+        model_instance.eval()
+        val_loss = 0.0
+        with torch.no_grad():
+            for inputs, labels in val_loader:
+                inputs, labels = inputs.to(device), labels.long().to(device)
+                outputs = model_instance(inputs)
+                loss = criterion(outputs, labels)
+                val_loss += loss.item()
 
-            avg_train_loss = train_loss / len(train_loader)
-            train_acc = accuracy_score(train_labels, train_preds)
+        avg_val_loss = val_loss / len(val_loader)
+        print(f"Validation loss: {avg_val_loss:.4f}")
+        log_trial_result(log_path, i, hp, avg_val_loss)
 
-            model_instance.eval()
-            val_loss = 0.0
-            val_preds, val_labels = [], []
-
-            with torch.no_grad():
-                for inputs, labels in val_loader:
-                    inputs, labels = inputs.to(device), labels.long().to(device)
-                    outputs = model_instance(inputs)
-                    loss = criterion(outputs, labels)
-                    val_loss += loss.item()
-                    preds = torch.argmax(outputs, dim=1)
-                    val_preds.extend(preds.cpu().numpy())
-                    val_labels.extend(labels.cpu().numpy())
-
-            avg_val_loss = val_loss / len(val_loader)
-            val_acc = accuracy_score(val_labels, val_preds)
-
-            log_epoch_metrics(metrics_dir, epoch, avg_train_loss, avg_val_loss, train_acc, val_acc)
-            save_partial_checkpoint(model_instance, optimizer, i, epoch, hp, hp_ckpt_dir)
-
-        print(f"Validation loss: {avg_val_loss:.4f}") # type: ignore
-        log_trial_result(log_path, i, hp, avg_val_loss) # type: ignore
-
-        if avg_val_loss < best_val_loss: # type: ignore
-            best_val_loss = avg_val_loss # type: ignore
+        if avg_val_loss < best_val_loss:
+            best_val_loss = avg_val_loss
             best_model_state = model_instance.state_dict()
             best_params = hp.copy()
             best_ckpt_path = vit_ckpt_dir / "best_vit_checkpoint.pth"
@@ -193,8 +167,12 @@ def fine_tune_model_with_search(
     optimizer = optim.Adam(best_model.parameters(), lr=best_params['lr'])
     criterion = nn.CrossEntropyLoss()
 
+    initialize_metric_logs(final_metrics_dir)
+
     for epoch in range(tuner_epochs):
         best_model.train()
+        train_loss = 0.0
+        train_preds, train_labels = [], []
         for inputs, labels in train_loader:
             inputs, labels = inputs.to(device), labels.long().to(device)
             optimizer.zero_grad()
@@ -203,22 +181,35 @@ def fine_tune_model_with_search(
             loss.backward()
             optimizer.step()
 
-    best_model.eval()
-    all_preds, all_labels = [], []
+            train_loss += loss.item()
+            preds = torch.argmax(outputs, dim=1)
+            train_preds.extend(preds.cpu().numpy())
+            train_labels.extend(labels.cpu().numpy())
 
-    with torch.no_grad():
-        for inputs, labels in val_loader:
-            inputs = inputs.to(device)
-            outputs = best_model(inputs)
-            preds = torch.argmax(outputs, dim=1).cpu()
-            all_preds.extend(preds.numpy())
-            all_labels.extend(labels.numpy())
+        avg_train_loss = train_loss / len(train_loader)
+        train_acc = accuracy_score(train_labels, train_preds)
 
-    save_confusion_matrix(metrics_dir, all_labels, all_preds)
-    acc = accuracy_score(all_labels, all_preds)
-    print(f"Final Validation Accuracy: {acc * 100:.2f}%")
+        best_model.eval()
+        val_loss = 0.0
+        val_preds, val_labels = [], []
+        with torch.no_grad():
+            for inputs, labels in val_loader:
+                inputs, labels = inputs.to(device), labels.long().to(device)
+                outputs = best_model(inputs)
+                loss = criterion(outputs, labels)
+                val_loss += loss.item()
+                preds = torch.argmax(outputs, dim=1)
+                val_preds.extend(preds.cpu().numpy())
+                val_labels.extend(labels.cpu().numpy())
 
-    # Save the fully trained best model
+        avg_val_loss = val_loss / len(val_loader)
+        val_acc = accuracy_score(val_labels, val_preds)
+
+        log_epoch_metrics(final_metrics_dir, epoch, avg_train_loss, avg_val_loss, train_acc, val_acc)
+
+    save_confusion_matrix(final_metrics_dir, val_labels, val_preds) # type: ignore
+    print(f"Final Validation Accuracy: {val_acc * 100:.2f}%") # type: ignore
+
     final_model_path = vit_ckpt_dir / "final_best_tuned_vit_model.pth"
     torch.save({
         'model_state_dict': best_model.state_dict(),
