@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import random
+import uuid  # Added for generating unique UUIDs
 from itertools import product
 from sklearn.metrics import accuracy_score
 from pathlib import Path
@@ -38,30 +39,10 @@ def save_best_checkpoint(model_state, optimizer_state, best_params, epoch, save_
         'params': best_params
     }, save_path)
 
-
-def log_trial_result(log_path, trial_index, hyperparams, val_loss):
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    log_data = {
-        'trial_index': trial_index,
-        **hyperparams,
-        'val_loss': val_loss
-    }
-
-    if log_path.suffix == '.json':
-        if log_path.exists():
-            with open(log_path, 'r') as f:
-                existing_data = json.load(f)
-        else:
-            existing_data = []
-        existing_data.append(log_data)
-        with open(log_path, 'w') as f:
-            json.dump(existing_data, f, indent=2)
-    elif log_path.suffix == '.csv':
-        df = pd.DataFrame([log_data])
-        if log_path.exists():
-            df.to_csv(log_path, mode='a', header=False, index=False)
-        else:
-            df.to_csv(log_path, index=False)
+    # Save best parameters separately as JSON
+    params_path = save_path.parent / "best_params.json"
+    with open(params_path, 'w') as f:
+        json.dump(best_params, f, indent=2)
 
 
 def fine_tune_model_with_search(
@@ -70,85 +51,20 @@ def fine_tune_model_with_search(
     val_loader,
     num_classes,
     tuner_epochs=50,
-    run_final_train=True
+    run_final_train=True,
+    optimize_params=True
 ):
-    base_ckpt_dir = Path("logs/checkpoints")
-    hp_ckpt_dir = base_ckpt_dir / "hp_tuning"
-    vit_ckpt_dir = base_ckpt_dir / "ViT_tuning"
-    log_path = vit_ckpt_dir / "trial_log.csv"
-    final_metrics_dir = Path("logs/metrics/ViT_tuning")
+    run_id = str(uuid.uuid4())  # Generate a unique UUID for this training run
+    base_ckpt_dir = Path(f"logs/checkpoints/ViT_tuning/{run_id}")
+    final_metrics_dir = Path(f"logs/metrics/ViT_tuning/{run_id}")
 
-    search_space = {
-        'lr': [1e-2, 1e-3, 1e-4],
-        'proj_dim': [32, 48, 64],
-        'n_blocks': [2, 3, 4, 5],
-        'n_heads': [2, 4, 6, 8],
-        'dropout': [0.3, 0.4, 0.5, 0.6, 0.7],
+    best_params = {
+        'lr': 1e-3,  # Default values
+        'proj_dim': 64,
+        'n_blocks': 4,
+        'n_heads': 8,
+        'dropout': 0.5
     }
-
-    param_combinations = [
-        combo for combo in product(*search_space.values())
-        if combo[1] % combo[3] == 0
-    ]
-    random.shuffle(param_combinations)
-    selected_trials = param_combinations[:10]
-
-    best_val_loss = float('inf')
-    best_model_state = None
-    best_params = {}
-
-    for i, params in enumerate(selected_trials):
-        hp = dict(zip(search_space.keys(), params))
-        print(f"\nTrial {i + 1}: Testing hyperparameters: {hp}")
-
-        model_instance = model_class(
-            num_classes=num_classes,
-            proj_dim=hp['proj_dim'],
-            n_blocks=hp['n_blocks'],
-            n_heads=hp['n_heads'],
-            dropout=hp['dropout']
-        ).to(device)
-
-        optimizer = optim.Adam(model_instance.parameters(), lr=hp['lr'])
-        criterion = nn.CrossEntropyLoss()
-
-        for epoch in range(tuner_epochs):
-            model_instance.train()
-            for inputs, labels in train_loader:
-                inputs, labels = inputs.to(device), labels.long().to(device)
-                optimizer.zero_grad()
-                outputs = model_instance(inputs)
-                loss = criterion(outputs, labels)
-                loss.backward()
-                optimizer.step()
-
-        # Validation loss after final epoch
-        model_instance.eval()
-        val_loss = 0.0
-        with torch.no_grad():
-            for inputs, labels in val_loader:
-                inputs, labels = inputs.to(device), labels.long().to(device)
-                outputs = model_instance(inputs)
-                loss = criterion(outputs, labels)
-                val_loss += loss.item()
-
-        avg_val_loss = val_loss / len(val_loader)
-        print(f"Validation loss: {avg_val_loss:.4f}")
-        log_trial_result(log_path, i, hp, avg_val_loss)
-
-        if avg_val_loss < best_val_loss:
-            best_val_loss = avg_val_loss
-            best_model_state = model_instance.state_dict()
-            best_params = hp.copy()
-            best_ckpt_path = vit_ckpt_dir / "best_vit_checkpoint.pth"
-            save_best_checkpoint(best_model_state, optimizer.state_dict(), best_params, epoch, best_ckpt_path) # type: ignore
-
-    if not best_params:
-        print("No best parameters were found. All trials failed.")
-        return
-
-    print(f"\nBest trial parameters: {best_params}")
-    print(f"Lowest validation loss: {best_val_loss:.4f}")
 
     if not run_final_train:
         print("Skipping final training as `run_final_train=False`.")
@@ -210,10 +126,12 @@ def fine_tune_model_with_search(
     save_confusion_matrix(final_metrics_dir, val_labels, val_preds) # type: ignore
     print(f"Final Validation Accuracy: {val_acc * 100:.2f}%") # type: ignore
 
-    final_model_path = vit_ckpt_dir / "final_best_tuned_vit_model.pth"
+    final_model_path = base_ckpt_dir / "final_best_tuned_vit_model.pth"
     torch.save({
         'model_state_dict': best_model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
         'params': best_params
     }, final_model_path)
     print(f"Fully trained model saved at: {final_model_path}")
+
+    return run_id  # Return the UUID for user reference

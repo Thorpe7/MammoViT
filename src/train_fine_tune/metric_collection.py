@@ -26,6 +26,7 @@ def log_epoch_metrics(log_dir, epoch, train_loss, val_loss, train_acc, val_acc):
     """
     Append training/validation metrics for the current epoch to CSV.
     """
+    log_dir.mkdir(parents=True, exist_ok=True)  # Ensure the directory exists
     metrics_path = log_dir / "epoch_metrics.csv"
     new_row = {
         "epoch": epoch,
@@ -42,6 +43,7 @@ def save_confusion_matrix(log_dir, labels, predictions):
     """
     Save confusion matrix as JSON (class x class matrix).
     """
+    log_dir.mkdir(parents=True, exist_ok=True)  # Ensure the directory exists
     cm = confusion_matrix(labels, predictions).tolist()
     cm_path = log_dir / "confusion_matrix.json"
     with open(cm_path, "w") as f:

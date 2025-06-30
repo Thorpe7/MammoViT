@@ -16,7 +16,7 @@ from src.models.ViT import ViTModel
 from src.train_fine_tune.metric_collection import initialize_metric_logs, log_epoch_metrics, save_confusion_matrix
 
 
-# 🆕 Add ChannelProjector module
+# Add ChannelProjector module
 class ChannelProjector(torch.nn.Module):
     def __init__(self):
         super().__init__()
