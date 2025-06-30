@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import uuid
+import random
 from itertools import product
 from sklearn.metrics import accuracy_score
 from pathlib import Path
@@ -52,12 +53,16 @@ def fine_tune_model_with_search(
     tuner_epochs=50,
     run_final_train=True,
     optimize_params=True,
-    logs_base_path="/content/drive/MyDrive/Embark_Labs/MammoViT/logs"
+    logs_base_path="/content/drive/MyDrive/EmbarkLabs/MammoViT/logs"
 ):
     run_id = str(uuid.uuid4())  # Each run to generate unique ID
     logs_base_path = Path(logs_base_path)
     base_ckpt_dir = logs_base_path / f"checkpoints/ViT_tuning/{run_id}"
     final_metrics_dir = logs_base_path / f"metrics/ViT_tuning/{run_id}"
+
+    # Ensure directories exist
+    base_ckpt_dir.mkdir(parents=True, exist_ok=True)
+    final_metrics_dir.mkdir(parents=True, exist_ok=True)
 
     # Hyperparameter ranges for grid search
     lr_values = [0.01, 0.001, 0.0001]
@@ -70,13 +75,24 @@ def fine_tune_model_with_search(
     best_val_acc = 0.0
 
     if optimize_params:
-        print("Optimizing parameters using grid search...")
-        for lr, proj_dim, n_blocks, n_heads, dropout in product(
-            lr_values, proj_dim_values, n_blocks_values, n_heads_values, dropout_values
-        ):
-            # Ensure proj_dim is divisible by n_heads
-            if proj_dim % n_heads != 0:
-                continue
+        print("Optimizing parameters using random sampling...")
+        all_combinations = [
+            (lr, proj_dim, n_blocks, n_heads, dropout)
+            for lr in lr_values
+            for proj_dim in proj_dim_values
+            for n_blocks in n_blocks_values
+            for n_heads in n_heads_values
+            for dropout in dropout_values
+            if proj_dim % n_heads == 0  # Ensure proj_dim is divisible by n_heads
+        ]
+        sampled_combinations = random.sample(all_combinations, min(40, len(all_combinations)))
+
+        best_params = None
+        best_val_acc = 0.0
+
+        for i, (lr, proj_dim, n_blocks, n_heads, dropout) in enumerate(sampled_combinations, start=1):
+            print(f"Testing trial {i}/{len(sampled_combinations)}: "
+                  f"lr={lr}, proj_dim={proj_dim}, n_blocks={n_blocks}, n_heads={n_heads}, dropout={dropout}")
 
             model_instance = model_class(
                 num_classes=num_classes,
@@ -188,7 +204,14 @@ def fine_tune_model_with_search(
 
         log_epoch_metrics(final_metrics_dir, epoch, avg_train_loss, avg_val_loss, train_acc, val_acc)
 
-    save_confusion_matrix(final_metrics_dir, val_labels, val_preds) # type: ignore
+    num_classes = len(set(val_labels))  # type: ignore
+    save_confusion_matrix(
+        final_metrics_dir, # type: ignore
+        val_labels, # type: ignore
+        val_preds, # type: ignore
+        num_classes=num_classes,
+        class_labels=[f"Class {i}" for i in range(num_classes)]
+    )
     print(f"Final Validation Accuracy: {val_acc * 100:.2f}%") # type: ignore
 
     final_model_path = base_ckpt_dir / "final_best_tuned_vit_model.pth"

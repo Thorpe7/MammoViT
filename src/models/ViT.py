@@ -22,6 +22,7 @@ class TransformerBlock(nn.Module):
         self.norm1 = nn.LayerNorm(embed_dim)
         self.ff = nn.Sequential(
             nn.Linear(embed_dim, ff_dim),
+            nn.GELU(),
             nn.Dropout(dropout),
             nn.Linear(ff_dim, embed_dim),
             nn.Dropout(dropout)
@@ -38,17 +39,11 @@ class ViTModel(nn.Module):
     def __init__(self, num_classes=4, dropout=0.3, proj_dim=64, n_blocks=2, n_heads=4):
         super().__init__()
 
-        # Conv2D: [B, 8, 16, 16] → [B, proj_dim, 4, 4] if kernel=4, stride=4
-        # Patch embedding: Converts the input image into smaller patches and projects them into a lower-dimensional space.
+        # Conv2D: [B, 8, 16, 16] → [B, proj_dim, 4, 4]
         self.conv = nn.Conv2d(in_channels=8, out_channels=proj_dim, kernel_size=4, stride=4)
 
-        # Positional encoding: Adds spatial information to patch embeddings, ensuring the model understands
-        # the relative positions of patches in the input image.
-        self.positional_encoding = nn.Parameter(torch.randn(1, 17, proj_dim))  # 16 patches + 1 cls_token
-
-        # Classification token: Serves as a representative token for the entire input sequence, used for
-        # classification tasks. It is appended to the sequence of patch embeddings.
-        self.cls_token = nn.Parameter(torch.randn(1, 1, proj_dim))
+        # Positional encoding
+        self.positional_encoding = nn.Parameter(torch.randn(1, 16, proj_dim))  # Double checked 16 patches
 
         # Transformer blocks
         self.blocks = nn.Sequential(*[
@@ -56,26 +51,21 @@ class ViTModel(nn.Module):
             for _ in range(n_blocks)
         ])
 
-        self.pool = nn.AdaptiveAvgPool1d(1)
         self.head = nn.Linear(proj_dim, num_classes)
 
     def forward(self, x):
         try:
-            # Patch embedding: Extracts patches from the input image and embeds them into feature vectors.
-            x = self.conv(x)
+            x = self.conv(x)  # [B, C, 4, 4]
             B, C, H, W = x.shape
-            x = x.permute(0, 2, 3, 1).reshape(B, H * W, C)  # Flatten patches
+            x = x.permute(0, 2, 3, 1).reshape(B, H * W, C)
 
-            # Add classification token
-            cls_token = self.cls_token.expand(B, -1, -1)  # Expand for batch size
-            x = torch.cat((cls_token, x), dim=1)  # Concatenate cls_token with patch embeddings
-
-            # Add positional encoding
-            x = x + self.positional_encoding[:, :x.size(1), :]  # Match sequence length
+            x = x + self.positional_encoding
 
             x = self.blocks(x)
-            x = x[:, 0, :]  # Extract cls_token output for classification
+
+            x = x.mean(dim=1)
             return self.head(x)
+
         except Exception as e:
             logging.error(f"ViTModel forward pass failed: {e}")
             raise e
