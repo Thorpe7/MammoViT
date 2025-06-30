@@ -44,6 +44,13 @@ def save_confusion_matrix(log_dir, labels, predictions, num_classes, class_label
     Save confusion matrix as JSON (class x class matrix) with class labels.
     """
     log_dir.mkdir(parents=True, exist_ok=True)  # Ensure the directory exists
+
+    # Debugging: Print labels and predictions
+    print("Labels:", labels)
+    print("Predictions:", predictions)
+    print("Unique labels:", set(labels))
+    print("Unique predictions:", set(predictions))
+
     cm = confusion_matrix(labels, predictions, labels=range(num_classes)).tolist()  # Ensure correct number of classes
     cm_path = log_dir / "confusion_matrix.json"
     with open(cm_path, "w") as f:
