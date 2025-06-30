@@ -170,18 +170,18 @@ def fine_tune_model_with_search(
             save_best_checkpoint(best_model_state, optimizer.state_dict(), best_params, epoch, best_ckpt_path) # type: ignore
 
     if not best_params:
-        print("❌ No best parameters were found. All trials failed.")
+        print("No best parameters were found. All trials failed.")
         return
 
     print(f"\nBest trial parameters: {best_params}")
     print(f"Lowest validation loss: {best_val_loss:.4f}")
 
     if not run_final_train:
-        print("⚠️ Skipping final training as `run_final_train=False`.")
+        print("Skipping final training as `run_final_train=False`.")
         return
 
     # --- Final Training ---
-    print("\n🔁 Retraining best model from scratch...")
+    print("\nRetraining best model from scratch...")
     best_model = model_class(
         num_classes=num_classes,
         proj_dim=best_params['proj_dim'],
@@ -216,7 +216,7 @@ def fine_tune_model_with_search(
 
     save_confusion_matrix(metrics_dir, all_labels, all_preds)
     acc = accuracy_score(all_labels, all_preds)
-    print(f"✅ Final Validation Accuracy: {acc * 100:.2f}%")
+    print(f"Final Validation Accuracy: {acc * 100:.2f}%")
 
     # Save the fully trained best model
     final_model_path = vit_ckpt_dir / "final_best_tuned_vit_model.pth"
@@ -225,4 +225,4 @@ def fine_tune_model_with_search(
         'optimizer_state_dict': optimizer.state_dict(),
         'params': best_params
     }, final_model_path)
-    print(f"✅ Fully trained model saved at: {final_model_path}")
+    print(f"Fully trained model saved at: {final_model_path}")

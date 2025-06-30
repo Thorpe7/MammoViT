@@ -1,8 +1,12 @@
+import os
 import torch
-from torch.utils.data import DataLoader
-from torchvision import datasets, transforms
+import torch.nn as nn
+from torch.utils.data import DataLoader, Subset
+from torchvision import transforms
+from torchvision.datasets import ImageFolder
 from torch.optim import Adam
 from torch.nn import CrossEntropyLoss
+from sklearn.model_selection import StratifiedShuffleSplit
 from pathlib import Path
 import os
 import requests
@@ -66,9 +70,8 @@ def prepare_imagenet_dataloader(data_dir, batch_size):
     train_dataset = datasets.ImageNet(root=data_dir, split='train', download=False, transform=transform)
     val_dataset = datasets.ImageNet(root=data_dir, split='val', download=False, transform=transform)
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-
+    train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
     return train_loader, val_loader
 
 
@@ -94,7 +97,9 @@ def train_vit_model(log_dir, save_path, epochs=10, batch_size=32, learning_rate=
     for epoch in range(1, epochs + 1):
         model.train()
         projector.train()
+        projector.train()
         train_loss, train_correct, train_total = 0, 0, 0
+
 
         for inputs, labels in train_loader:
             inputs, labels = inputs.to(device), labels.to(device)
@@ -106,14 +111,15 @@ def train_vit_model(log_dir, save_path, epochs=10, batch_size=32, learning_rate=
             optimizer.step()
 
             train_loss += loss.item() * inputs.size(0)
-            _, preds = torch.max(outputs, 1)
-            train_correct += (preds == labels).sum().item()
+            train_correct += (outputs.argmax(1) == labels).sum().item()
             train_total += labels.size(0)
 
         train_acc = train_correct / train_total
         train_loss /= train_total
 
+        # Validation
         model.eval()
+        projector.eval()
         projector.eval()
         val_loss, val_correct, val_total = 0, 0, 0
         all_labels, all_preds = [], []
@@ -126,12 +132,11 @@ def train_vit_model(log_dir, save_path, epochs=10, batch_size=32, learning_rate=
                 loss = criterion(outputs, labels)
 
                 val_loss += loss.item() * inputs.size(0)
-                _, preds = torch.max(outputs, 1)
-                val_correct += (preds == labels).sum().item()
+                val_correct += (outputs.argmax(1) == labels).sum().item()
                 val_total += labels.size(0)
 
+                all_preds.extend(outputs.argmax(1).cpu().numpy())
                 all_labels.extend(labels.cpu().numpy())
-                all_preds.extend(preds.cpu().numpy())
 
         val_acc = val_correct / val_total
         val_loss /= val_total
