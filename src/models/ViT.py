@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import logging
 from pathlib import Path
 
-# Logging setup
+# Logging
 log_dir = Path().cwd() / "logs" / "inference"
 log_dir.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(
@@ -47,18 +47,17 @@ class ViTModel(nn.Module):
             for _ in range(n_blocks)
         ])
 
-        # Pool + head
         self.pool = nn.AdaptiveAvgPool1d(1)
         self.head = nn.Linear(proj_dim, num_classes)
 
     def forward(self, x):
         try:
-            x = self.conv(x)  # [B, proj_dim, 4, 4]
+            x = self.conv(x)
             B, C, H, W = x.shape
-            x = x.permute(0, 2, 3, 1).reshape(B, H * W, C)  # [B, 16, proj_dim]
-            x = self.blocks(x)  # Transformer layers
-            x = self.pool(x.transpose(1, 2)).squeeze(-1)  # [B, proj_dim]
-            return self.head(x)  # [B, num_classes]
+            x = x.permute(0, 2, 3, 1).reshape(B, H * W, C)
+            x = self.blocks(x)
+            x = self.pool(x.transpose(1, 2)).squeeze(-1)
+            return self.head(x)
         except Exception as e:
             logging.error(f"ViTModel forward pass failed: {e}")
             raise e

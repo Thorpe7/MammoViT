@@ -6,7 +6,7 @@ import json
 import seaborn as sns
 import numpy as np
 
-# Plotting function for accuracy
+
 def plot_accuracy(metrics_df):
     plt.figure(figsize=(10, 5))
     plt.plot(metrics_df["epoch"], metrics_df["train_acc"], label="Train Accuracy", marker='o')
@@ -19,7 +19,6 @@ def plot_accuracy(metrics_df):
     plt.tight_layout()
     plt.show()
 
-# Plotting function for loss
 def plot_loss(metrics_df):
     plt.figure(figsize=(10, 5))
     plt.plot(metrics_df["epoch"], metrics_df["train_loss"], label="Train Loss", marker='o')
@@ -32,7 +31,7 @@ def plot_loss(metrics_df):
     plt.tight_layout()
     plt.show()
 
-# Load and plot confusion matrix from JSON
+
 def plot_confusion_matrix(json_path):
     with open(json_path, "r") as f:
         cm_data = json.load(f)

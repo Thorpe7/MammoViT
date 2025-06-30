@@ -7,9 +7,11 @@ def load_csv(csv_path):
     return pd.read_csv(csv_path, sep=';')
 
 def simplify_birads(birads):
-    """Simplify Bi-Rads scores to their base integer values."""
+    """Simplify Bi-Rads scores to their base integer values.
+    (e.g., '4a' -> 4)
+    """
     if isinstance(birads, str):
-        return int(birads[0])  # Extract the first character (e.g., '4a' -> 4)
+        return int(birads[0])
     return int(birads)
 
 def organize_files_by_birads(csv_path, dicom_dir, output_dir):
@@ -23,11 +25,9 @@ def organize_files_by_birads(csv_path, dicom_dir, output_dir):
     """
     # Load the CSV file
     df = load_csv(csv_path)
-
-    # Ensure output directory exists
     os.makedirs(output_dir, exist_ok=True)
 
-    # Iterate over rows in the DataFrame
+    # Iterate over df to organize files
     for _, row in df.iterrows():
         file_id = str(row['File Name'])  # Ensure file_id is a string
         birads = simplify_birads(row['Bi-Rads'])
@@ -52,14 +52,14 @@ def organize_files_by_birads(csv_path, dicom_dir, output_dir):
 
 if __name__ == "__main__":
     # Local Use
-    organize_files_by_birads(
-        csv_path='/Users/thorpe/git_repos/MammoViT/data/INbreast/INbreast.csv',
-        dicom_dir='/Users/thorpe/git_repos/MammoViT/data/INbreast/AllDICOMs',
-        output_dir='/Users/thorpe/git_repos/MammoViT/data/INbreast/OrganizedByBiRads'
-    )
-    # Colab Use
     # organize_files_by_birads(
-    #     csv_path='/content/drive/MyDrive/EmbarkLabs/INbreast_Release_1.0/INbreast.csv',
-    #     dicom_dir='/content/drive/MyDrive/EmbarkLabs/INbreast_Release_1.0/AllDICOMs',
-    #     output_dir='/content/drive/MyDrive/EmbarkLabs/INbreast_Release_1.0/OrganizedByBiRads'
+    #     csv_path='/Users/thorpe/git_repos/MammoViT/data/INbreast/INbreast.csv',
+    #     dicom_dir='/Users/thorpe/git_repos/MammoViT/data/INbreast/AllDICOMs',
+    #     output_dir='/Users/thorpe/git_repos/MammoViT/data/INbreast/OrganizedByBiRads'
     # )
+    # Colab Use
+    organize_files_by_birads(
+        csv_path='/content/drive/MyDrive/EmbarkLabs/INbreast_Release_1.0/INbreast.csv',
+        dicom_dir='/content/drive/MyDrive/EmbarkLabs/INbreast_Release_1.0/AllDICOMs',
+        output_dir='/content/drive/MyDrive/EmbarkLabs/INbreast_Release_1.0/OrganizedByBiRads'
+    )

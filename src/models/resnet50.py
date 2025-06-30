@@ -3,6 +3,9 @@ import torch.nn as nn
 import torch
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# Following methodology from paper, ResNet50 pre-trained on ImageNet1k used
+# With last two layers ("top two layers") removed as to only output feature maps.
 class ResNet:
     def __init__(self):
         # Load ResNet50 model with IMAGENET1K_V2 weights

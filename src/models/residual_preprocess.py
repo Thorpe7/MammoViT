@@ -4,6 +4,7 @@ import torch.nn.functional as F
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+# Standard ResNet Stack
 class PreprocessingResidual(nn.Module):
     def __init__(self, in_channels=3, feature_dim=64):
         super().__init__()
@@ -25,7 +26,6 @@ class PreprocessingResidual(nn.Module):
 
         self.projection = nn.Linear(feature_dim, 224 * 224 * 3)
 
-        # Move model to device
         self.to(device)
 
     def forward(self, x: torch.Tensor):
@@ -39,12 +39,12 @@ class PreprocessingResidual(nn.Module):
         out = out + residual
         out = self.pool(out)
 
-        out = self.global_pool(out)  # [B, C, 1, 1]
+        out = self.global_pool(out)
         return out
 
     def linear_projection(self, x: torch.Tensor):
         x = x.to(device)
-        x = x.view(x.size(0), -1)         # [B, C]
-        x = self.projection(x)            # [B, 224*224*3]
-        x = x.view(x.size(0), 3, 224, 224)  # [B, 3, 224, 224]
+        x = x.view(x.size(0), -1)
+        x = self.projection(x)
+        x = x.view(x.size(0), 3, 224, 224)
         return x

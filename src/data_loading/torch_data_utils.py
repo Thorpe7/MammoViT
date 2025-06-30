@@ -3,7 +3,6 @@ import logging
 from pathlib import Path
 
 import numpy as np
-import torch
 from torch.utils.data import Dataset, DataLoader, Subset, WeightedRandomSampler
 from torchvision import datasets, transforms
 from sklearn.model_selection import StratifiedShuffleSplit
@@ -56,17 +55,18 @@ def load_data_with_logging(data_dir, batch_size=32, num_workers=2, val_split=0.2
             transforms.ToTensor()
         ])
 
-        # Load full dataset (no transform yet)
+        # Load full dataset
         base_dataset = datasets.ImageFolder(root=data_dir)
         targets = [label for _, label in base_dataset.samples]
         indices = np.arange(len(base_dataset))
 
-        # Stratified split
+        # Stratified split as mentioned in the publication
         splitter = StratifiedShuffleSplit(n_splits=1, test_size=val_split, random_state=42)
         train_idx, val_idx = next(splitter.split(X=indices, y=targets))
 
         train_subset = Subset(base_dataset, train_idx)
         val_subset = Subset(base_dataset, val_idx)
+
 
         train_dataset = TransformSubset(train_subset, train_transform)
         val_dataset = TransformSubset(val_subset, val_transform)

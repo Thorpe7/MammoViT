@@ -3,8 +3,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import random
-import uuid  # Added for generating unique UUIDs
+import uuid
 from itertools import product
 from sklearn.metrics import accuracy_score
 from pathlib import Path
@@ -55,30 +54,82 @@ def fine_tune_model_with_search(
     optimize_params=True,
     logs_base_path="/content/drive/MyDrive/Embark_Labs/MammoViT/logs"
 ):
-    run_id = str(uuid.uuid4())  # Generate a unique UUID for this training run
-    logs_base_path = Path(logs_base_path)  # Convert to Path object
+    run_id = str(uuid.uuid4())  # Each run to generate unique ID
+    logs_base_path = Path(logs_base_path)
     base_ckpt_dir = logs_base_path / f"checkpoints/ViT_tuning/{run_id}"
     final_metrics_dir = logs_base_path / f"metrics/ViT_tuning/{run_id}"
 
-    # Default parameters
-    best_params = {
-        'lr': 1e-3,
-        'proj_dim': 64,
-        'n_blocks': 4,
-        'n_heads': 8,
-        'dropout': 0.5
-    }
+    # Hyperparameter ranges for grid search
+    lr_values = [0.01, 0.001, 0.0001]
+    proj_dim_values = [32, 48, 64]
+    n_blocks_values = [2, 3, 4, 5]
+    n_heads_values = [2, 4, 6, 8]
+    dropout_values = [0.3, 0.4, 0.5, 0.6, 0.7]
+
+    best_params = None
+    best_val_acc = 0.0
 
     if optimize_params:
-        print("Optimizing parameters...")
-        # Example optimization logic (replace with actual optimization logic)
-        best_params['lr'] = 5e-4  # Adjust learning rate
-        best_params['proj_dim'] = 128  # Adjust projection dimension
-        best_params['n_blocks'] = 6  # Adjust number of blocks
-        best_params['n_heads'] = 12  # Adjust number of heads
-        best_params['dropout'] = 0.3  # Adjust dropout rate
+        print("Optimizing parameters using grid search...")
+        for lr, proj_dim, n_blocks, n_heads, dropout in product(
+            lr_values, proj_dim_values, n_blocks_values, n_heads_values, dropout_values
+        ):
+            # Ensure proj_dim is divisible by n_heads
+            if proj_dim % n_heads != 0:
+                continue
+
+            model_instance = model_class(
+                num_classes=num_classes,
+                proj_dim=proj_dim,
+                n_blocks=n_blocks,
+                n_heads=n_heads,
+                dropout=dropout
+            ).to(device)
+
+            optimizer = optim.Adam(model_instance.parameters(), lr=lr)
+            criterion = nn.CrossEntropyLoss()
+
+            val_acc = 0.0
+            for epoch in range(tuner_epochs):
+                model_instance.train()
+                for inputs, labels in train_loader:
+                    inputs, labels = inputs.to(device), labels.long().to(device)
+                    optimizer.zero_grad()
+                    outputs = model_instance(inputs)
+                    loss = criterion(outputs, labels)
+                    loss.backward()
+                    optimizer.step()
+
+                model_instance.eval()
+                val_preds, val_labels = [], []
+                with torch.no_grad():
+                    for inputs, labels in val_loader:
+                        inputs, labels = inputs.to(device), labels.long().to(device)
+                        outputs = model_instance(inputs)
+                        preds = torch.argmax(outputs, dim=1)
+                        val_preds.extend(preds.cpu().numpy())
+                        val_labels.extend(labels.cpu().numpy())
+
+                val_acc = accuracy_score(val_labels, val_preds)
+
+            if val_acc > best_val_acc:
+                best_val_acc = val_acc
+                best_params = {
+                    'lr': lr,
+                    'proj_dim': proj_dim,
+                    'n_blocks': n_blocks,
+                    'n_heads': n_heads,
+                    'dropout': dropout
+                }
     else:
         print("Skipping parameter optimization as `optimize_params=False`.")
+        best_params = {
+            'lr': 1e-3,
+            'proj_dim': 64,
+            'n_blocks': 4,
+            'n_heads': 8,
+            'dropout': 0.5
+        }
 
     if not run_final_train:
         print("Skipping final training as `run_final_train=False`.")
@@ -88,13 +139,13 @@ def fine_tune_model_with_search(
     print("\nRetraining best model from scratch...")
     best_model = model_class(
         num_classes=num_classes,
-        proj_dim=best_params['proj_dim'],
-        n_blocks=best_params['n_blocks'],
-        n_heads=best_params['n_heads'],
-        dropout=best_params['dropout']
+        proj_dim=best_params['proj_dim'], # type: ignore
+        n_blocks=best_params['n_blocks'], # type: ignore
+        n_heads=best_params['n_heads'], # type: ignore
+        dropout=best_params['dropout'] # type: ignore
     ).to(device)
 
-    optimizer = optim.Adam(best_model.parameters(), lr=best_params['lr'])
+    optimizer = optim.Adam(best_model.parameters(), lr=best_params['lr']) # type: ignore
     criterion = nn.CrossEntropyLoss()
 
     initialize_metric_logs(final_metrics_dir)
