@@ -52,19 +52,33 @@ def fine_tune_model_with_search(
     num_classes,
     tuner_epochs=50,
     run_final_train=True,
-    optimize_params=True
+    optimize_params=True,
+    logs_base_path="/content/drive/MyDrive/Embark_Labs/MammoViT/logs"
 ):
     run_id = str(uuid.uuid4())  # Generate a unique UUID for this training run
-    base_ckpt_dir = Path(f"logs/checkpoints/ViT_tuning/{run_id}")
-    final_metrics_dir = Path(f"logs/metrics/ViT_tuning/{run_id}")
+    logs_base_path = Path(logs_base_path)  # Convert to Path object
+    base_ckpt_dir = logs_base_path / f"checkpoints/ViT_tuning/{run_id}"
+    final_metrics_dir = logs_base_path / f"metrics/ViT_tuning/{run_id}"
 
+    # Default parameters
     best_params = {
-        'lr': 1e-3,  # Default values
+        'lr': 1e-3,
         'proj_dim': 64,
         'n_blocks': 4,
         'n_heads': 8,
         'dropout': 0.5
     }
+
+    if optimize_params:
+        print("Optimizing parameters...")
+        # Example optimization logic (replace with actual optimization logic)
+        best_params['lr'] = 5e-4  # Adjust learning rate
+        best_params['proj_dim'] = 128  # Adjust projection dimension
+        best_params['n_blocks'] = 6  # Adjust number of blocks
+        best_params['n_heads'] = 12  # Adjust number of heads
+        best_params['dropout'] = 0.3  # Adjust dropout rate
+    else:
+        print("Skipping parameter optimization as `optimize_params=False`.")
 
     if not run_final_train:
         print("Skipping final training as `run_final_train=False`.")
