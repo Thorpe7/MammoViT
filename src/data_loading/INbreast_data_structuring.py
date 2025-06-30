@@ -51,9 +51,15 @@ def organize_files_by_birads(csv_path, dicom_dir, output_dir):
 
 
 if __name__ == "__main__":
-    # Example usage:
+    # Local Use
     organize_files_by_birads(
         csv_path='/Users/thorpe/git_repos/MammoViT/data/INbreast/INbreast.csv',
         dicom_dir='/Users/thorpe/git_repos/MammoViT/data/INbreast/AllDICOMs',
         output_dir='/Users/thorpe/git_repos/MammoViT/data/INbreast/OrganizedByBiRads'
     )
+    # Colab Use
+    # organize_files_by_birads(
+    #     csv_path='/content/drive/MyDrive/EmbarkLabs/INbreast_Release_1.0/INbreast.csv',
+    #     dicom_dir='/content/drive/MyDrive/EmbarkLabs/INbreast_Release_1.0/AllDICOMs',
+    #     output_dir='/content/drive/MyDrive/EmbarkLabs/INbreast_Release_1.0/OrganizedByBiRads'
+    # )
