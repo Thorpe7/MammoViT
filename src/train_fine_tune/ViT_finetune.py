@@ -91,9 +91,6 @@ def fine_tune_model_with_search(
         best_val_acc = 0.0
 
         for i, (lr, proj_dim, n_blocks, n_heads, dropout) in enumerate(sampled_combinations, start=1):
-            print(f"Testing trial {i}/{len(sampled_combinations)}: "
-                  f"lr={lr}, proj_dim={proj_dim}, n_blocks={n_blocks}, n_heads={n_heads}, dropout={dropout}")
-
             model_instance = model_class(
                 num_classes=num_classes,
                 proj_dim=proj_dim,
@@ -137,6 +134,9 @@ def fine_tune_model_with_search(
                     'n_heads': n_heads,
                     'dropout': dropout
                 }
+
+            print(f"Testing trial {i}/{len(sampled_combinations)}: "
+                  f"Loss={loss}, val_acc={val_acc},lr={lr}, proj_dim={proj_dim}, n_blocks={n_blocks}, n_heads={n_heads}, dropout={dropout}")
     else:
         print("Skipping parameter optimization as `optimize_params=False`.")
         best_params = {

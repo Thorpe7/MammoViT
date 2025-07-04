@@ -1,4 +1,7 @@
 # Retry without torch dependency since we only need numpy and matplotlib
+
+import os
+from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
@@ -46,4 +49,42 @@ def plot_confusion_matrix(json_path):
     plt.tight_layout()
     plt.show()
 
+def plot_class_counts(dir_path: Path, normalize_vals: bool):
+    """Grabs class counts and plots them.
 
+    Args:
+        dir_path (PosixPath): Path to top level data directory
+    """
+
+    labels = []
+    counts = []
+    pointer = 0
+    for dir in dir_path.iterdir():
+        if pointer >= len(os.listdir()):
+            break
+        file_count = 0
+        labels.append(dir.name)
+        for file in dir.glob("*.png"):
+            if file.is_file:
+                file_count += 1
+        counts.append(file_count)
+    print(labels)
+    print(counts)
+    if normalize_vals:
+        counts = normalize_values(counts)
+    test = plt.bar(counts, counts, 0.1)
+    plt.bar_label(test, labels)
+    plt.show()
+
+def normalize_values(input_list: list):
+    input_arr = np.array(input_list)
+    min_val = min(input_arr)
+    max_val = max(input_arr)
+    normalized = (input_arr - min_val) / (max_val - min_val)
+    normalized = list(normalized)
+    return normalized
+if __name__ == "__main__":
+    data_dir = Path("/Users/thorpe/git_repos/MammoViT/data/KAU")
+    plot_class_counts(data_dir, True)
+    data_dir2 = Path("/Users/thorpe/git_repos/MammoViT/data/INbreast/OrganizedByBiRads_PNG")
+    plot_class_counts(data_dir2, True)
